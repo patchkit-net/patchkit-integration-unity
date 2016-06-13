@@ -31,6 +31,15 @@ namespace PatchKit.Unity.Common
             }
         }
 
+        public static EventWaitHandle InvokeCoroutine(IEnumerator coroutine)
+        {
+            ManualResetEvent manualResetEvent = new ManualResetEvent(false);
+
+            Invoke(() => _instance.StartCoroutine(CoroutineWithEventWaitHandle(coroutine, manualResetEvent)));
+
+            return manualResetEvent;
+        }
+
         private static IEnumerator CoroutineWithEventWaitHandle(IEnumerator coroutine, ManualResetEvent manualResetEvent)
         {
             try
@@ -44,15 +53,6 @@ namespace PatchKit.Unity.Common
             {
                 manualResetEvent.Set();
             }
-        }
-
-        public static EventWaitHandle InvokeCoroutine(IEnumerator coroutine)
-        {
-            ManualResetEvent manualResetEvent = new ManualResetEvent(false);
-
-            Invoke(() => _instance.StartCoroutine(CoroutineWithEventWaitHandle(coroutine, manualResetEvent)));
-
-            return manualResetEvent;
         }
 
         private readonly Queue<Action> _pendingActions = new Queue<Action>();
