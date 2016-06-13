@@ -1,5 +1,7 @@
 ﻿using PatchKit.API;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 
 namespace PatchKit.Unity.API
@@ -27,6 +29,17 @@ namespace PatchKit.Unity.API
 #if UNITY_EDITOR
             if (settings == null)
             {
+                bool pingObject = false;
+
+                if (EditorApplication.isPlaying)
+                {
+                    EditorApplication.isPlaying = false;
+
+                    EditorUtility.DisplayDialog("PatchKit API Settings created!", "PatchKit Settings has been created.", "OK");
+
+                    pingObject = true;
+                }
+
                 settings = CreateInstance<PatchKitUnityAPISettings>();
 
                 AssetDatabase.CreateAsset(settings, string.Format("Assets/Plugins/PatchKit/Resources/{0}.assets", SettingsFileName));
@@ -34,6 +47,11 @@ namespace PatchKit.Unity.API
 
                 AssetDatabase.Refresh();
                 AssetDatabase.SaveAssets();
+
+                if (pingObject)
+                {
+                    EditorGUIUtility.PingObject(settings);
+                }
             }
 #endif
 
@@ -50,7 +68,12 @@ namespace PatchKit.Unity.API
                 return new PatchKitAPISettings();
             }
 
-            return new PatchKitAPISettings(instance.Url, instance.MirrorUrls, instance.DelayBetweenMirrorRequests);
+            return new PatchKitAPISettings()
+            {
+                DelayBetweenMirrorRequests = instance.DelayBetweenMirrorRequests,
+                MirrorUrls = instance.MirrorUrls,
+                Url = instance.Url
+            };
         }
     }
 }
