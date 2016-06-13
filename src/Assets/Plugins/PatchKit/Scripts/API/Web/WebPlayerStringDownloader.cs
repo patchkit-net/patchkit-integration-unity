@@ -4,42 +4,37 @@ using System.Net;
 using System.Threading;
 using PatchKit.API.Async;
 using PatchKit.API.Web;
+using PatchKit.Unity.Common;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
-namespace PatchKit.Integration.Unity
+namespace PatchKit.Unity.API.Web
 {
-    public class PatchKitWWW : IWWW
+    internal class WebPlayerStringDownloader : IStringDownloader
     {
         private class CoroutineResult
         {
-            public WWWResponse<string> Response;
+            public StringDownloadResult DownloadResult;
 
             public Exception Exception;
 
             public bool HasBeenCancelled;
         }
 
-        private readonly PatchKitWWWDispatcher _patchKitWWWDispatcher;
-
-        public PatchKitWWW()
+        public WebPlayerStringDownloader()
         {
-            var gameObject = new GameObject("_PatchKitWWWDispatcher");
-            Object.DontDestroyOnLoad(gameObject);
-
-            _patchKitWWWDispatcher = gameObject.AddComponent<PatchKitWWWDispatcher>();
+            Dispatcher.Initialize();
         }
 
         public ICancellableAsyncResult BeginDownloadString(string url, CancellableAsyncCallback asyncCallback = null,
             object state = null)
         {
-            return new AsyncResult<WWWResponse<string>>(cancellationToken => DownloadString(url, cancellationToken), asyncCallback,
+            return new AsyncResult<StringDownloadResult>(cancellationToken => DownloadString(url, cancellationToken), asyncCallback,
                 state);
         }
 
-        public WWWResponse<string> EndDownloadString(ICancellableAsyncResult asyncResult)
+        public StringDownloadResult EndDownloadString(ICancellableAsyncResult asyncResult)
         {
-            var result = asyncResult as AsyncResult<WWWResponse<string>>;
+            var result = asyncResult as AsyncResult<StringDownloadResult>;
 
             if (result == null)
             {
@@ -49,13 +44,13 @@ namespace PatchKit.Integration.Unity
             return result.FetchResultsFromAsyncOperation();
         }
 
-        private WWWResponse<string> DownloadString(string url, AsyncCancellationToken cancellationToken)
+        private StringDownloadResult DownloadString(string url, AsyncCancellationToken cancellationToken)
         {
             var waitHandle = new ManualResetEvent(false);
 
             var coroutineResult = new CoroutineResult();
 
-            _patchKitWWWDispatcher.StartCoroutineFromOtherThread(DownloadStringCoroutine(url, cancellationToken, waitHandle, coroutineResult));
+            Dispatcher.InvokeCoroutine(DownloadStringCoroutine(url, cancellationToken, waitHandle, coroutineResult));
 
             waitHandle.WaitOne();
 
@@ -69,7 +64,7 @@ namespace PatchKit.Integration.Unity
                 throw coroutineResult.Exception;
             }
 
-            return coroutineResult.Response;
+            return coroutineResult.DownloadResult;
         }
 
         private IEnumerator DownloadStringCoroutine(string url, AsyncCancellationToken cancellationToken, ManualResetEvent waitHandle, CoroutineResult result)
@@ -109,7 +104,7 @@ namespace PatchKit.Integration.Unity
                     {
                         try
                         {
-                            result.Response = new WWWResponse<string>(www.text, GetResponseCode(www));
+                            result.DownloadResult = new StringDownloadResult(www.text, GetResponseCode(www));
                         }
                         catch (Exception exception)
                         {

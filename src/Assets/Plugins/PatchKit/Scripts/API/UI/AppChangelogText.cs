@@ -1,10 +1,12 @@
 ﻿using System.Collections;
 using System.Linq;
+using PatchKit.Unity.API.Utilities;
+using UnityEngine;
 using UnityEngine.UI;
 
-namespace PatchKit.Integration.Unity.UI
+namespace PatchKit.Unity.API.UI
 {
-    public class PatchKitAppChangelog : PatchKitBehaviour
+    public class AppChangelogText : MonoBehaviour
     {
         public string SecretKey;
 
@@ -12,13 +14,13 @@ namespace PatchKit.Integration.Unity.UI
 
         public int NumberOfBreakLines;
 
-        protected override IEnumerator Request()
+        protected virtual IEnumerator Start()
         {
-            var request = API.BeginGetAppVersionsList(SecretKey);
+            var request = PatchKitUnity.API.BeginGetAppVersionsList(SecretKey);
 
-            yield return request.Wait();
+            yield return request.WaitCoroutine();
 
-            var versionsList = API.EndGetAppVersionsList(request);
+            var versionsList = PatchKitUnity.API.EndGetAppVersionsList(request);
 
             string separator = string.Empty;
             for (int i = 0; i < NumberOfBreakLines; i++)
@@ -28,8 +30,6 @@ namespace PatchKit.Integration.Unity.UI
 
             Text.text = string.Join(separator,
                 versionsList.Select(version => string.Format("{0}\n{1}", version.Label, version.Changelog)).ToArray());
-
-            IsDone = true;
         }
 
         protected virtual void Reset()

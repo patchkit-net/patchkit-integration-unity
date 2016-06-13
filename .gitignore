@@ -5,3 +5,7 @@
 /src/src.sln
 /src/Assembly-CSharp-firstpass.csproj
 /src/Assembly-CSharp.csproj
+/src/Assembly-CSharp-Editor.csproj
+/src/src.CSharp.Editor.csproj
+/src/src.CSharp.Plugins.csproj
+/src/src.CSharp.csproj
