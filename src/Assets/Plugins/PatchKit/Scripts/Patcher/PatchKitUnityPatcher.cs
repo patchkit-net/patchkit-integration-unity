@@ -36,6 +36,12 @@ namespace PatchKit.Unity.Patcher
 
         private AsyncCancellationTokenSource _cancellationTokenSource = new AsyncCancellationTokenSource();
 
+        private string _secretKey;
+
+        private PatchKitAPI _api;
+
+        private ApplicationData _applicationData;
+
         private void Awake()
         {
             ClearStatus();
@@ -61,9 +67,9 @@ namespace PatchKit.Unity.Patcher
 
             _cancellationTokenSource = new AsyncCancellationTokenSource();
 
-            string secretKey = SecretKey;
-            string executableName = ExecutableName;
-            var api = PatchKitUnity.API;
+            _secretKey = SecretKey;
+            _api = PatchKitUnity.API;
+            _applicationData = new ApplicationData(ApplicationDataLocation.GetPath());
 
             ThreadPool.QueueUserWorkItem(state =>
             {
@@ -71,8 +77,13 @@ namespace PatchKit.Unity.Patcher
                 Dispatcher.Invoke(OnPatchingStarted.Invoke);
                 try
                 {
-                    Patch(secretKey, executableName, new ApplicationData(ApplicationDataLocation.GetPath()),  api, _cancellationTokenSource.Token);
+                    Patch(_cancellationTokenSource.Token);
                     _status.State = PatchKitUnityPatcherState.Succeed;
+                }
+                catch (NoInternetConnectionException exception)
+                {
+                    _status.State = PatchKitUnityPatcherState.NoInternetConnection;
+                    Debug.LogException(exception);
                 }
                 catch (Exception exception)
                 {
@@ -92,11 +103,60 @@ namespace PatchKit.Unity.Patcher
             _cancellationTokenSource.Cancel();
         }
 
-        private void Patch(string secretKey, string exectuableName, ApplicationData applicationData, PatchKitAPI api, AsyncCancellationToken cancellationToken)
+        public void RunApplication()
         {
-            int currentVersion = api.GetAppLatestVersionId(secretKey).Id;
+            RunApplication("");
+        }
 
+        public void RunApplication(string arguments)
+        {
+            System.Diagnostics.Process.Start(ExecutableName, arguments);
+        }
 
+        public void Close()
+        {
+            UnityEngine.Application.Quit();
+        }
+
+        private void Patch(AsyncCancellationToken cancellationToken)
+        {
+            if(!InternetConnectionTester.CheckInternetConnection(cancellationToken))
+            {
+                throw new NoInternetConnectionException();
+            }
+
+            int currentVersion = _api.GetAppLatestVersionId(_secretKey).Id;
+
+            int? commonVersion = _applicationData.Cache.GetCommonVersion();
+
+            if(commonVersion == null || !CheckVersionConsistency(commonVersion.Value))
+            {
+                commonVersion = null;
+                _applicationData.Clear();
+            }
+            else if(commonVersion.Value == currentVersion)
+            {
+                return;
+            }
+
+            if(commonVersion == null)
+            {
+                
+            }
+        }
+
+        private void DownloadVersionContent(string secretKey, int version)
+        {
+            var contentSummary = _api.GetAppContentSummary(secretKey, version);
+
+            var 
+        }
+
+        private bool CheckVersionConsistency(int version)
+        {   
+            var commonVersionContentSummary = _api.GetAppContentSummary(_secretKey, version);
+
+            return _applicationData.CheckFilesConsistency(version, commonVersionContentSummary);
         }
     }
 }

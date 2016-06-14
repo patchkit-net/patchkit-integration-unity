@@ -5,6 +5,7 @@
         None,
         Patching,
         Succeed,
+        NoInternetConnection,
         Failed
     }
 }

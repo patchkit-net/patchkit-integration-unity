@@ -11,6 +11,16 @@ namespace PatchKit.Unity.Common
     {
         private static Dispatcher _instance;
 
+        private static Thread _mainThread;
+
+        private static void ValidateInstance()
+        {
+            if(_instance == null)
+            {
+                throw new InvalidOperationException("Dispatcher has to be initialized before any usage.");
+            }
+        }
+
         public static void Initialize()
         {
             if (_instance == null)
@@ -20,22 +30,62 @@ namespace PatchKit.Unity.Common
                 DontDestroyOnLoad(gameObject);
 
                 _instance = gameObject.AddComponent<Dispatcher>();
+
+                _mainThread = Thread.CurrentThread;
             }
         }
 
         public static void Invoke(Action action)
         {
-            lock (_instance._pendingActions)
+            ValidateInstance();
+
+            if(_mainThread == Thread.CurrentThread)
             {
-                _instance._pendingActions.Enqueue(action);
+                lock (_instance._pendingActions)
+                {
+
+                    _instance._pendingActions.Enqueue(ActionWithEventWaitHandle(action, manualResetEvent));
+
+                    return manualResetEvent;
+                }
+            }
+        }
+
+        private static void ActionWithEventWaitHandle(Action action, ManualResetEvent manualResetEvent)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
+            finally
+            {
+                manualResetEvent.Set();
             }
         }
 
         public static EventWaitHandle InvokeCoroutine(IEnumerator coroutine)
         {
+            ValidateInstance();
+
             ManualResetEvent manualResetEvent = new ManualResetEvent(false);
 
-            Invoke(() => _instance.StartCoroutine(CoroutineWithEventWaitHandle(coroutine, manualResetEvent)));
+            Action coroutineStarter = () => _instance.StartCoroutine(CoroutineWithEventWaitHandle(coroutine, manualResetEvent));
+
+            if(_mainThread == Thread.CurrentThread)
+            {
+                coroutineStarter();
+            }
+            else
+            {
+                lock (_instance._pendingActions)
+                {
+                    _instance._pendingActions.Enqueue(coroutineStarter);
+                }
+            }
 
             return manualResetEvent;
         }
@@ -48,6 +98,10 @@ namespace PatchKit.Unity.Common
                 {
                     yield return coroutine.Current;
                 }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
             }
             finally
             {

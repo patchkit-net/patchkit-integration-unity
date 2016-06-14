@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace PatchKit.Integration.Unity.Examples
+namespace PatchKit.Unity.Examples
 {
     public class OpenURL : MonoBehaviour
     {
