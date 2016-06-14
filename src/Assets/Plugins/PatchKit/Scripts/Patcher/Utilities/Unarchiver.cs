@@ -2,9 +2,11 @@
 
 namespace PatchKit.Unity.Patcher.Utilities
 {
-    public static class Unarchiver
+    public class Unarchiver
     {
-        public static void Unarchive(string archivePath, string destinationPath, AsyncCancellationToken cancellationToken)
+        public delegate void UnarchiveProgress(float progress);
+
+        public void Unarchive(string packagePath, string destinationPath, UnarchiveProgress onUnarchiveProgress, AsyncCancellationToken cancellationToken)
         {
             //TODO:
         }

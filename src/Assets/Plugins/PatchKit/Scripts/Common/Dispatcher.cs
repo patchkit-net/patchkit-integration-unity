@@ -35,20 +35,30 @@ namespace PatchKit.Unity.Common
             }
         }
 
-        public static void Invoke(Action action)
+        private static EventWaitHandle BaseInvoke(Action<ManualResetEvent> actionStarter)
         {
             ValidateInstance();
 
-            if(_mainThread == Thread.CurrentThread)
+            ManualResetEvent manualResetEvent = new ManualResetEvent(false);
+
+            if (_mainThread == Thread.CurrentThread)
+            {
+                actionStarter(manualResetEvent);
+            }
+            else
             {
                 lock (_instance._pendingActions)
                 {
-
-                    _instance._pendingActions.Enqueue(ActionWithEventWaitHandle(action, manualResetEvent));
-
-                    return manualResetEvent;
+                    _instance._pendingActions.Enqueue(() => actionStarter(manualResetEvent));
                 }
             }
+
+            return manualResetEvent;
+        }
+
+        public static EventWaitHandle Invoke(Action action)
+        {
+            return BaseInvoke(manualResetEvent => ActionWithEventWaitHandle(action, manualResetEvent));
         }
 
         private static void ActionWithEventWaitHandle(Action action, ManualResetEvent manualResetEvent)
@@ -69,44 +79,29 @@ namespace PatchKit.Unity.Common
 
         public static EventWaitHandle InvokeCoroutine(IEnumerator coroutine)
         {
-            ValidateInstance();
-
-            ManualResetEvent manualResetEvent = new ManualResetEvent(false);
-
-            Action coroutineStarter = () => _instance.StartCoroutine(CoroutineWithEventWaitHandle(coroutine, manualResetEvent));
-
-            if(_mainThread == Thread.CurrentThread)
-            {
-                coroutineStarter();
-            }
-            else
-            {
-                lock (_instance._pendingActions)
-                {
-                    _instance._pendingActions.Enqueue(coroutineStarter);
-                }
-            }
-
-            return manualResetEvent;
+            return BaseInvoke(manualResetEvent => _instance.StartCoroutine(CoroutineWithEventWaitHandle(coroutine, manualResetEvent)));
         }
 
         private static IEnumerator CoroutineWithEventWaitHandle(IEnumerator coroutine, ManualResetEvent manualResetEvent)
         {
-            try
+            while (true)
             {
-                while (coroutine.MoveNext())
+                try
                 {
-                    yield return coroutine.Current;
+                    if (!coroutine.MoveNext())
+                    {
+                        break;
+                    }
                 }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+
+                yield return coroutine.Current;
             }
-            catch (Exception exception)
-            {
-                Debug.LogException(exception);
-            }
-            finally
-            {
-                manualResetEvent.Set();
-            }
+
+            manualResetEvent.Set();
         }
 
         private readonly Queue<Action> _pendingActions = new Queue<Action>();

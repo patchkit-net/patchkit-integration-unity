@@ -16,6 +16,11 @@ namespace PatchKit.Unity.Patcher.Application
         /// </summary>
         public readonly string Path;
 
+        /// <summary>
+        /// Temporary data path.
+        /// </summary>
+        public readonly string TempPath;
+
         private readonly string _cachePath;
 
         private void RecreateCache()
@@ -28,6 +33,17 @@ namespace PatchKit.Unity.Patcher.Application
             Path = path;
             _cachePath = System.IO.Path.Combine(Path, "patcher_cache.json");
             RecreateCache();
+
+            {
+                int iteration = 0;
+
+                do
+                {
+                    TempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
+                } while (iteration++ < 1000 && Directory.Exists(TempPath));
+
+                Directory.CreateDirectory(TempPath);
+            }
         }
 
         /// <summary>
