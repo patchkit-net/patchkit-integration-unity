@@ -4,9 +4,6 @@ using UnityEngine;
 
 namespace PatchKit.Unity.API
 {
-    /// <summary>
-    /// PatchKit Unity API.
-    /// </summary>
     public static partial class PatchKitUnity
     {
         private static PatchKitAPI _api;

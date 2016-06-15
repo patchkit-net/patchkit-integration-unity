@@ -59,6 +59,8 @@ namespace PatchKit.Unity.Patcher
 
         private Unarchiver _unarchiver;
 
+        private Librsync _librsync;
+
         private void Awake()
         {
             Dispatcher.Initialize();
@@ -88,10 +90,13 @@ namespace PatchKit.Unity.Patcher
 
             _unarchiver = new Unarchiver();
 
+            _librsync = new Librsync();
+
             _status.State = PatchKitUnityPatcherState.Patching;
 
             ThreadPool.QueueUserWorkItem(state =>
             {
+                Debug.Log("OnPatchingStarted");
                 Dispatcher.Invoke(OnPatchingStarted.Invoke);
                 try
                 {
@@ -112,6 +117,8 @@ namespace PatchKit.Unity.Patcher
                 {
                     ResetStatus();
                     Dispatcher.Invoke(OnPatchingFinished.Invoke);
+
+                    Debug.Log(string.Format("OnPatchingFinished - {0}.", _status.State));
                 }
             });
         }
@@ -128,12 +135,12 @@ namespace PatchKit.Unity.Patcher
 
         public void StartApplication(string arguments)
         {
-            System.Diagnostics.Process.Start(ExecutableName, arguments);
+            System.Diagnostics.Process.Start(Path.Combine(ApplicationDataLocation.GetPath(), ExecutableName), arguments);
         }
 
         private void Patch(AsyncCancellationToken cancellationToken)
         {
-            if(!InternetConnectionTester.CheckInternetConnection(cancellationToken))
+            if (!InternetConnectionTester.CheckInternetConnection(cancellationToken))
             {
                 throw new NoInternetConnectionException();
             }
@@ -142,7 +149,7 @@ namespace PatchKit.Unity.Patcher
 
             int? commonVersion = _applicationData.Cache.GetCommonVersion();
 
-            if(commonVersion == null || !CheckVersionConsistency(commonVersion.Value))
+            if(commonVersion == null || currentVersion < commonVersion.Value || !CheckVersionConsistency(commonVersion.Value))
             {
                 _applicationData.Clear();
 
@@ -150,7 +157,19 @@ namespace PatchKit.Unity.Patcher
             }
             else if(commonVersion.Value != currentVersion)
             {
-                // DownloadVersionPatch(currentVersion, cancellationToken);
+                int totalVersionsCount = currentVersion - commonVersion.Value;
+
+                int doneVersionsCount = 0;
+
+                while (currentVersion > commonVersion.Value)
+                {
+                    commonVersion = commonVersion.Value + 1;
+
+                    // ReSharper disable once AccessToModifiedClosure
+                    DownloadVersionDiff(commonVersion.Value, progress => OnProgress((doneVersionsCount + progress) / totalVersionsCount), cancellationToken);
+
+                    doneVersionsCount++;
+                }
             }
         }
 
@@ -162,21 +181,135 @@ namespace PatchKit.Unity.Patcher
 
             var contentPackagePath = Path.Combine(_applicationData.TempPath, string.Format("download-content-{0}.package", version));
 
-            var contentTorrentDownloadPath = Path.Combine(_applicationData.TempPath, string.Format("download-content-{0}.torrent", version));
+            var contentTorrentPath = Path.Combine(_applicationData.TempPath, string.Format("download-content-{0}.torrent", version));
 
-            _status.IsDownloading = true;
-
-            _httpDownloader.DownloadFile(contentTorrentUrl.Url, contentTorrentDownloadPath, OnDownloadProgress, cancellationToken);
-
-            _torrentDownloader.DownloadFile(contentTorrentDownloadPath, contentPackagePath, OnDownloadProgress, cancellationToken);
-
-            _status.IsDownloading = false;
-
-            _unarchiver.Unarchive(contentPackagePath, _applicationData.Path, OnUnarchiveProgress, cancellationToken);
-
-            foreach (var contentFile in contentSummary.Files)
+            try
             {
-                _applicationData.Cache.SetFileVersion(contentFile.Path, version);
+                _status.IsDownloading = true;
+
+                _httpDownloader.DownloadFile(contentTorrentUrl.Url, contentTorrentPath, 0, OnDownloadProgress,
+                    cancellationToken);
+
+                _torrentDownloader.DownloadFile(contentTorrentPath, contentPackagePath, OnDownloadProgress,
+                    cancellationToken);
+
+                _status.IsDownloading = false;
+
+                _unarchiver.Unarchive(contentPackagePath, _applicationData.Path, OnProgress, cancellationToken);
+
+                foreach (var contentFile in contentSummary.Files)
+                {
+                    _applicationData.Cache.SetFileVersion(contentFile.Path, version);
+                }
+            }
+            finally
+            {
+                if (File.Exists(contentTorrentPath))
+                {
+                    File.Delete(contentTorrentPath);
+                }
+
+                if (File.Exists(contentPackagePath))
+                {
+                    File.Delete(contentPackagePath);
+                }
+            }
+        }
+
+        private void DownloadVersionDiff(int version, Action<float> onProgress, AsyncCancellationToken cancellationToken)
+        {
+            var diffSummary = _api.GetAppDiffSummary(_secretKey, version);
+
+            var diffTorrentUrl = _api.GetAppDiffTorrentUrl(_secretKey, version);
+
+            var diffPackagePath = Path.Combine(_applicationData.TempPath, string.Format("download-diff-{0}.package", version));
+
+            var diffTorrentPath = Path.Combine(_applicationData.TempPath, string.Format("download-diff-{0}.torrent", version));
+
+            var diffDirectoryPath = Path.Combine(_applicationData.TempPath, string.Format("diff-{0}", version));
+
+            try
+            {
+                _status.IsDownloading = true;
+
+                _httpDownloader.DownloadFile(diffTorrentUrl.Url, diffTorrentPath, 0, OnDownloadProgress, cancellationToken);
+
+                _torrentDownloader.DownloadFile(diffTorrentPath, diffPackagePath, OnDownloadProgress, cancellationToken);
+
+                _unarchiver.Unarchive(diffPackagePath, diffDirectoryPath, progress => onProgress(progress * 0.1f), cancellationToken);
+
+                _status.IsDownloading = false;
+
+                int totalFilesCount = diffSummary.RemovedFiles.Length + diffSummary.AddedFiles.Length +
+                                        diffSummary.ModifiedFiles.Length;
+
+                int doneFilesCount = 0;
+
+                onProgress(0.1f);
+
+                foreach (var removedFile in diffSummary.RemovedFiles)
+                {
+                    _applicationData.ClearFile(removedFile);
+
+                    doneFilesCount++;
+
+                    onProgress(0.1f + (float) doneFilesCount/totalFilesCount*0.9f);
+                }
+
+                foreach (var addedFile in diffSummary.AddedFiles)
+                {
+                    // HACK: Workaround for directories included in diff summary.
+                    if (Directory.Exists(Path.Combine(diffDirectoryPath, addedFile)))
+                    {
+                        continue;
+                    }
+
+                    File.Copy(Path.Combine(diffDirectoryPath, addedFile), _applicationData.GetFilePath(addedFile), true);
+
+                    _applicationData.Cache.SetFileVersion(addedFile, version);
+
+                    doneFilesCount++;
+
+                    onProgress(0.1f + (float)doneFilesCount / totalFilesCount * 0.9f);
+                }
+
+                foreach (var modifiedFile in diffSummary.ModifiedFiles)
+                {
+                    // HACK: Workaround for directories included in diff summary.
+                    if (Directory.Exists(_applicationData.GetFilePath(modifiedFile)))
+                    {
+                        continue;
+                    }
+
+                    _applicationData.Cache.SetFileVersion(modifiedFile, -1);
+
+                    _librsync.Patch(_applicationData.GetFilePath(modifiedFile), Path.Combine(diffDirectoryPath, modifiedFile), cancellationToken);
+
+                    _applicationData.Cache.SetFileVersion(modifiedFile, version);
+
+                    doneFilesCount++;
+
+                    onProgress(0.1f + (float)doneFilesCount / totalFilesCount * 0.9f);
+                }
+
+                onProgress(1.0f);
+            }
+            finally
+            {
+                if (File.Exists(diffTorrentPath))
+                {
+                    File.Delete(diffTorrentPath);
+                }
+
+                if (File.Exists(diffPackagePath))
+                {
+                    File.Delete(diffPackagePath);
+                }
+
+                if (Directory.Exists(diffDirectoryPath))
+                {
+                    Directory.Delete(diffDirectoryPath, true);
+                }
             }
         }
 
@@ -187,16 +320,19 @@ namespace PatchKit.Unity.Patcher
             return _applicationData.CheckFilesConsistency(version, commonVersionContentSummary);
         }
 
-        private void OnUnarchiveProgress(float progress)
+        private void OnProgress(float progress)
         {
+            Debug.Log(string.Format("OnProgress - {0}", progress));
+
             _status.Progress = progress;
 
             Dispatcher.Invoke(OnPatchingProgress.Invoke);
         }
 
-        private void OnDownloadProgress(string fileName, float progress, float speed)
+        private void OnDownloadProgress(float progress, float speed)
         {
-            _status.DownloadFileName = fileName;
+            Debug.Log(string.Format("OnDownloadProgress - {0} with speed {1}", progress, speed));
+
             _status.DownloadProgress = progress;
             _status.DownloadSpeed = speed;
 
@@ -209,7 +345,6 @@ namespace PatchKit.Unity.Patcher
 
             _status.IsDownloading = false;
             _status.DownloadProgress = 1.0f;
-            _status.DownloadFileName = string.Empty;
             _status.DownloadSpeed = 0.0f;
         }
     }

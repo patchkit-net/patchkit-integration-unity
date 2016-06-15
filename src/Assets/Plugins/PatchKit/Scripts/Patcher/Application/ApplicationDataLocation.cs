@@ -12,15 +12,20 @@ namespace PatchKit.Unity.Patcher.Application
     {
         public static string GetPath(this ApplicationDataLocation @this)
         {
-            switch (@this)
+            if (!UnityEngine.Application.isEditor)
             {
-                case ApplicationDataLocation.NextToPatcherExecutable:
+                switch (@this)
                 {
-                    return Path.GetDirectoryName(UnityEngine.Application.dataPath);
+                    case ApplicationDataLocation.NextToPatcherExecutable:
+                    {
+                        return Path.GetDirectoryName(UnityEngine.Application.dataPath);
+                    }
                 }
+
+                throw new InvalidEnumArgumentException("this", (int) @this, typeof(ApplicationDataLocation));
             }
-            
-            throw new InvalidEnumArgumentException("this", (int)@this, typeof(ApplicationDataLocation));
+
+            return UnityEngine.Application.persistentDataPath;
         }
     }
 }

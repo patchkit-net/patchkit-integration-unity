@@ -10,8 +10,6 @@
 
         public float DownloadProgress;
 
-        public string DownloadFileName;
-
         public float DownloadSpeed;
     }
 }

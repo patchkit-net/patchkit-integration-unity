@@ -1,51 +1,36 @@
-﻿using UnityEngine;
-using System.Collections;
+﻿using System;
+using UnityEngine;
+using System.Net;
 
 namespace PatchKit.Unity.Common
 {
     internal static class InternetConnectionTester 
     {
-        private class TestResult
-        {
-            public TestResult()
-            {
-                Result = false;
-            }
-
-            public bool Result;
-        }
-
         private const int Timeout = 10000;
 
         private const string TestingUrl = "http://www.google.com";
 
         public static bool CheckInternetConnection(PatchKit.API.Async.AsyncCancellationToken cancellationToken)
         {
-            var testResult = new TestResult();
-
-            var waitHandle = Dispatcher.InvokeCoroutine(CheckInternetConnectionCoroutine(testResult, cancellationToken));
-
-            waitHandle.WaitOne();
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return testResult.Result;
-        }
-
-        private static IEnumerator CheckInternetConnectionCoroutine(TestResult testResult, PatchKit.API.Async.AsyncCancellationToken cancellationToken)
-        {
-            var www = new WWW(TestingUrl);
-
-            float time = Time.realtimeSinceStartup;
-
-            while(Time.realtimeSinceStartup - time < Timeout && !www.isDone && !cancellationToken.IsCancellationRequested)
+            try
             {
-                yield return null;
+                var webRequest = (HttpWebRequest)WebRequest.Create(TestingUrl);
+
+                webRequest.Timeout = Timeout;
+
+                var webResponse = (HttpWebResponse)webRequest.GetResponse();
+
+                if (webResponse.StatusCode == HttpStatusCode.OK)
+                {
+                    return true;
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
             }
 
-            testResult.Result = www.isDone && string.IsNullOrEmpty(www.error);
-
-            www.Dispose();
+            return false;
         }
     }
 }
