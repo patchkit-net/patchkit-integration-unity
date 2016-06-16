@@ -1,10 +1,11 @@
 ﻿namespace PatchKit.Unity.Patcher
 {
-    public enum PatchKitUnityPatcherState
+    public enum PatcherState
     {
         None,
         Patching,
         Succeed,
+        Cancelled,
         NoInternetConnection,
         Failed
     }

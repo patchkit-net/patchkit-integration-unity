@@ -1,8 +1,8 @@
 ﻿namespace PatchKit.Unity.Patcher
 {
-    public struct PatchKitUnityPatcherStatus
+    public struct PatcherStatus
     {
-        public PatchKitUnityPatcherState State;
+        public PatcherState State;
 
         public float Progress;
 

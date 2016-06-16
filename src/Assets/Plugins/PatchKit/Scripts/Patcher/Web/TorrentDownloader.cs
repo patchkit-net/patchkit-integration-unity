@@ -74,6 +74,8 @@ namespace PatchKit.Unity.Patcher.Web
                         Thread.Sleep(5);
                     }
 
+                    onDownloadProgress(1.0f, 0.0f);
+
                     TorrentFile[] files = torrentManager.Torrent.Files;
                     if (files.Length > 0)
                     {

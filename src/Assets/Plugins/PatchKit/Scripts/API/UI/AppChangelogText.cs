@@ -14,8 +14,30 @@ namespace PatchKit.Unity.API.UI
 
         public int NumberOfBreakLines;
 
-        protected virtual IEnumerator Start()
+        private Coroutine _refreshCoroutine;
+
+        public void Refresh()
         {
+            if (_refreshCoroutine != null)
+            {
+                StopCoroutine(_refreshCoroutine);
+            }
+
+            _refreshCoroutine = StartCoroutine(RefreshCoroutine());
+        }
+
+        private void Start()
+        {
+            Refresh();
+        }
+
+        private IEnumerator RefreshCoroutine()
+        {
+            if (string.IsNullOrEmpty(SecretKey))
+            {
+                yield break;
+            }
+
             var request = PatchKitUnity.API.BeginGetAppVersionsList(SecretKey);
 
             yield return request.WaitCoroutine();
@@ -29,10 +51,10 @@ namespace PatchKit.Unity.API.UI
             }
 
             Text.text = string.Join(separator,
-                versionsList.Select(version => string.Format("{0}\n{1}", version.Label, version.Changelog)).ToArray());
+                versionsList.OrderByDescending(version => version.Id).Select(version => string.Format("{0}\n{1}", version.Label, version.Changelog)).ToArray());
         }
 
-        protected virtual void Reset()
+        private void Reset()
         {
             if (Text == null)
             {

@@ -11,8 +11,30 @@ namespace PatchKit.Unity.API.UI
 
         public Text Text;
 
-        protected virtual IEnumerator Start()
+        private Coroutine _refreshCoroutine;
+
+        public void Refresh()
         {
+            if (_refreshCoroutine != null)
+            {
+                StopCoroutine(_refreshCoroutine);
+            }
+
+            _refreshCoroutine = StartCoroutine(RefreshCoroutine());
+        }
+
+        private void Start()
+        {
+            Refresh();
+        }
+
+        private IEnumerator RefreshCoroutine()
+        {
+            if (string.IsNullOrEmpty(SecretKey))
+            {
+                yield break;
+            }
+
             var request = PatchKitUnity.API.BeginGetAppLatestVersion(SecretKey);
 
             yield return request.WaitCoroutine();
@@ -22,7 +44,7 @@ namespace PatchKit.Unity.API.UI
             Text.text = latestVersion.Label;
         }
 
-        protected virtual void Reset()
+        private void Reset()
         {
             if (Text == null)
             {

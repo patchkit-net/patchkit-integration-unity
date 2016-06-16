@@ -20,9 +20,11 @@ namespace PatchKit.Unity.Patcher
     {
         // Configuration
 
-        public PlatformDependentString SecretKey;
+        public string SecretKey;
+        
+        public string ExecutableName;
 
-        public PlatformDependentString ExecutableName;
+        public string ExecutableArguments;
 
         public ApplicationDataLocation ApplicationDataLocation;
 
@@ -36,12 +38,12 @@ namespace PatchKit.Unity.Patcher
 
         // Status
 
-        public PatchKitUnityPatcherStatus Status
+        public PatcherStatus Status
         {
             get { return _status; }
         }
 
-        private PatchKitUnityPatcherStatus _status;
+        private PatcherStatus _status;
 
         // Variables used during patching
 
@@ -66,12 +68,22 @@ namespace PatchKit.Unity.Patcher
             Dispatcher.Initialize();
 
             ResetStatus();
-            _status.State = PatchKitUnityPatcherState.None;
+            _status.State = PatcherState.None;
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (_status.State == PatcherState.Patching)
+            {
+                CancelPatching();
+
+                UnityEngine.Application.CancelQuit();
+            }
         }
 
         public void StartPatching()
         {
-            if (_status.State == PatchKitUnityPatcherState.Patching)
+            if (_status.State == PatcherState.Patching)
             {
                 throw new InvalidOperationException("Patching is already started.");
             }
@@ -92,33 +104,34 @@ namespace PatchKit.Unity.Patcher
 
             _librsync = new Librsync();
 
-            _status.State = PatchKitUnityPatcherState.Patching;
+            _status.State = PatcherState.Patching;
 
             ThreadPool.QueueUserWorkItem(state =>
             {
-                Debug.Log("OnPatchingStarted");
                 Dispatcher.Invoke(OnPatchingStarted.Invoke);
                 try
                 {
                     Patch(_cancellationTokenSource.Token);
-                    _status.State = PatchKitUnityPatcherState.Succeed;
+                    _status.State = PatcherState.Succeed;
                 }
                 catch (NoInternetConnectionException exception)
                 {
-                    _status.State = PatchKitUnityPatcherState.NoInternetConnection;
+                    _status.State = PatcherState.NoInternetConnection;
                     Debug.LogException(exception);
+                }
+                catch (OperationCanceledException)
+                {
+                    _status.State = PatcherState.Cancelled;
                 }
                 catch (Exception exception)
                 {
-                    _status.State = PatchKitUnityPatcherState.Failed;
+                    _status.State = PatcherState.Failed;
                     Debug.LogException(exception);
                 }
                 finally
                 {
                     ResetStatus();
                     Dispatcher.Invoke(OnPatchingFinished.Invoke);
-
-                    Debug.Log(string.Format("OnPatchingFinished - {0}.", _status.State));
                 }
             });
         }
@@ -130,19 +143,23 @@ namespace PatchKit.Unity.Patcher
 
         public void StartApplication()
         {
-            StartApplication("");
+            System.Diagnostics.Process.Start(Path.Combine(ApplicationDataLocation.GetPath(), ExecutableName), ExecutableArguments);
         }
 
-        public void StartApplication(string arguments)
+        public void StartApplicationAndQuit()
         {
-            System.Diagnostics.Process.Start(Path.Combine(ApplicationDataLocation.GetPath(), ExecutableName), arguments);
+            StartApplication();
+            UnityEngine.Application.Quit();
         }
 
         private void Patch(AsyncCancellationToken cancellationToken)
         {
+            _status.Progress = 0.0f;
+
             if (!InternetConnectionTester.CheckInternetConnection(cancellationToken))
             {
-                throw new NoInternetConnectionException();
+                //TODO:
+                //throw new NoInternetConnectionException();
             }
 
             int currentVersion = _api.GetAppLatestVersionId(_secretKey).Id;
@@ -322,8 +339,6 @@ namespace PatchKit.Unity.Patcher
 
         private void OnProgress(float progress)
         {
-            Debug.Log(string.Format("OnProgress - {0}", progress));
-
             _status.Progress = progress;
 
             Dispatcher.Invoke(OnPatchingProgress.Invoke);
@@ -331,8 +346,6 @@ namespace PatchKit.Unity.Patcher
 
         private void OnDownloadProgress(float progress, float speed)
         {
-            Debug.Log(string.Format("OnDownloadProgress - {0} with speed {1}", progress, speed));
-
             _status.DownloadProgress = progress;
             _status.DownloadSpeed = speed;
 
