@@ -22,11 +22,7 @@ namespace PatchKit.Unity.Patcher
 
         public string SecretKey;
 
-        public string ExecutableName;
-
-        public string ExecutableArguments;
-
-        public string ApplicationDataLocation;
+        public string ApplicationDataPath;
 
         // Events
 
@@ -71,6 +67,11 @@ namespace PatchKit.Unity.Patcher
             _status.State = PatcherState.None;
         }
 
+        private void OnDestroy()
+        {
+            CancelPatching();
+        }
+
         private void OnApplicationQuit()
         {
             if (_status.State == PatcherState.Patching)
@@ -94,7 +95,7 @@ namespace PatchKit.Unity.Patcher
 
             _api = PatchKitUnity.API;
 
-            _applicationData = new ApplicationData(GetApplicationDataPath());
+            _applicationData = new ApplicationData(ApplicationDataPath);
 
             _httpDownloader = new HttpDownloader();
 
@@ -139,17 +140,6 @@ namespace PatchKit.Unity.Patcher
         public void CancelPatching()
         {
             _cancellationTokenSource.Cancel();
-        }
-
-        public void StartApplication()
-        {
-            System.Diagnostics.Process.Start(Path.Combine(GetApplicationDataPath(), ExecutableName), ExecutableArguments);
-        }
-
-        public void StartApplicationAndQuit()
-        {
-            StartApplication();
-            UnityEngine.Application.Quit();
         }
 
         private void Patch(AsyncCancellationToken cancellationToken)
@@ -359,16 +349,6 @@ namespace PatchKit.Unity.Patcher
             _status.IsDownloading = false;
             _status.DownloadProgress = 1.0f;
             _status.DownloadSpeed = 0.0f;
-        }
-
-        private string GetApplicationDataPath()
-        {
-            var basePath = UnityEngine.Application.isEditor ?
-                UnityEngine.Application.persistentDataPath :
-                Path.GetDirectoryName(UnityEngine.Application.dataPath);
-
-            // ReSharper disable once AssignNullToNotNullAttribute
-            return Path.Combine(basePath, ApplicationDataLocation.TrimStart('/','\\'));
         }
     }
 }

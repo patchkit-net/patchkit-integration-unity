@@ -17,7 +17,7 @@ namespace PatchKit.Unity.Examples.Editor
             PlayerSettings.defaultScreenWidth = 600;
             PlayerSettings.defaultScreenHeight = 400;
 
-            var levels = new[] {"Assets/PatchKit/Examples/Patcher Example.unity"};
+            var levels = new[] {"Assets/PatchKit Patcher/Patcher.unity"};
 
             BuildPipeline.BuildPlayer(levels, buildPath, buildTarget, BuildOptions.None);
 
