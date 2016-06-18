@@ -5,7 +5,7 @@ using PatchKit.API.Async;
 
 namespace PatchKit.Unity.Patcher.Web
 {
-    public class HttpDownloader
+    internal class HttpDownloader
     {
         public HttpDownloader()
         {

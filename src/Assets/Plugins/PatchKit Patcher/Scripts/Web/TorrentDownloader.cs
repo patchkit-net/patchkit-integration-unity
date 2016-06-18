@@ -8,7 +8,7 @@ using PatchKit.API.Async;
 
 namespace PatchKit.Unity.Patcher.Web
 {
-    public class TorrentDownloader
+    internal class TorrentDownloader
     {
         public delegate void DownloadProgress(float progress, float speed);
 

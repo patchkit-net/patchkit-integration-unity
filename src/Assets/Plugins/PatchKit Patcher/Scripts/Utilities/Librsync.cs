@@ -5,14 +5,14 @@ using PatchKit.API.Async;
 
 namespace PatchKit.Unity.Patcher.Utilities
 {
-    public class LibrsyncException : Exception
+    internal class LibrsyncException : Exception
     {
         public LibrsyncException(int status) : base(string.Format("rdiff failure - {0}", status))
         {
         }
     }
 
-    public class Librsync
+    internal class Librsync
     {
         [DllImport("rsync", EntryPoint = "rs_file_open")]
         private static extern IntPtr rs_file_open(string filename, string mode);
