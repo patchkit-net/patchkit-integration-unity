@@ -21,12 +21,12 @@ namespace PatchKit.Unity.Patcher
         // Configuration
 
         public string SecretKey;
-        
+
         public string ExecutableName;
 
         public string ExecutableArguments;
 
-        public ApplicationDataLocation ApplicationDataLocation;
+        public string ApplicationDataLocation;
 
         // Events
 
@@ -94,7 +94,7 @@ namespace PatchKit.Unity.Patcher
 
             _api = PatchKitUnity.API;
 
-            _applicationData = new ApplicationData(ApplicationDataLocation.GetPath());
+            _applicationData = new ApplicationData(GetApplicationDataPath());
 
             _httpDownloader = new HttpDownloader();
 
@@ -143,7 +143,7 @@ namespace PatchKit.Unity.Patcher
 
         public void StartApplication()
         {
-            System.Diagnostics.Process.Start(Path.Combine(ApplicationDataLocation.GetPath(), ExecutableName), ExecutableArguments);
+            System.Diagnostics.Process.Start(Path.Combine(GetApplicationDataPath(), ExecutableName), ExecutableArguments);
         }
 
         public void StartApplicationAndQuit()
@@ -166,13 +166,13 @@ namespace PatchKit.Unity.Patcher
 
             int? commonVersion = _applicationData.Cache.GetCommonVersion();
 
-            if(commonVersion == null || currentVersion < commonVersion.Value || !CheckVersionConsistency(commonVersion.Value))
+            if (commonVersion == null || currentVersion < commonVersion.Value || !CheckVersionConsistency(commonVersion.Value))
             {
                 _applicationData.Clear();
 
                 DownloadVersionContent(currentVersion, cancellationToken);
             }
-            else if(commonVersion.Value != currentVersion)
+            else if (commonVersion.Value != currentVersion)
             {
                 int totalVersionsCount = currentVersion - commonVersion.Value;
 
@@ -270,7 +270,7 @@ namespace PatchKit.Unity.Patcher
 
                     doneFilesCount++;
 
-                    onProgress(0.1f + (float) doneFilesCount/totalFilesCount*0.9f);
+                    onProgress(0.1f + (float)doneFilesCount / totalFilesCount * 0.9f);
                 }
 
                 foreach (var addedFile in diffSummary.AddedFiles)
@@ -359,6 +359,16 @@ namespace PatchKit.Unity.Patcher
             _status.IsDownloading = false;
             _status.DownloadProgress = 1.0f;
             _status.DownloadSpeed = 0.0f;
+        }
+
+        private string GetApplicationDataPath()
+        {
+            var basePath = UnityEngine.Application.isEditor ?
+                UnityEngine.Application.persistentDataPath :
+                Path.GetDirectoryName(UnityEngine.Application.dataPath);
+
+            // ReSharper disable once AssignNullToNotNullAttribute
+            return Path.Combine(basePath, ApplicationDataLocation.TrimStart('/','\\'));
         }
     }
 }
