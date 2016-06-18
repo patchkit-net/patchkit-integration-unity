@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 #endif
 
-namespace PatchKit.Unity.Examples
+namespace PatchKit.Unity.Patcher
 {
     public class BorderlessWindow : MonoBehaviour
     {

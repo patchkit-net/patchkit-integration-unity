@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Linq;
 using UnityEngine;
-using PatchKit.Unity.Patcher;
 
-namespace PatchKit.Unity.Examples
+namespace PatchKit.Unity.Patcher
 {
     [RequireComponent(typeof(PatchKitUnityPatcher))]
     public class PatcherStarter : MonoBehaviour

@@ -1,10 +1,9 @@
 ﻿using PatchKit.Unity.API.UI;
-using PatchKit.Unity.Patcher;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.UI;
 
-namespace PatchKit.Unity.Examples.Patcher
+namespace PatchKit.Unity.Patcher
 {
     [RequireComponent(typeof(PatchKitUnityPatcher))]
     public class PatcherLayout : MonoBehaviour
