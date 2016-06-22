@@ -10,9 +10,9 @@ namespace PatchKit.Unity.Patcher.Web
 {
     internal class TorrentDownloader
     {
-        public delegate void DownloadProgress(float progress, float speed);
+        public delegate void DownloadProgressHandler(float progress, float speed);
 
-        public void DownloadFile(string torrentPath, string destinationPath, DownloadProgress onDownloadProgress, AsyncCancellationToken cancellationToken)
+        public void DownloadFile(string torrentPath, string destinationPath, DownloadProgressHandler onDownloadProgress, AsyncCancellationToken cancellationToken)
         {
             string downloadDir = destinationPath + "_data";
 
@@ -40,8 +40,6 @@ namespace PatchKit.Unity.Patcher.Web
 
                     double lastProgress = 0.0;
 
-                    float downloadSpeed = 0.0f;
-
                     while (!torrentManager.Complete)
                     {
                         if (cancellationToken.IsCancellationRequested)
@@ -60,7 +58,7 @@ namespace PatchKit.Unity.Patcher.Web
 
                         if (stopwatch.ElapsedMilliseconds > 0 && torrentManager.Progress > lastProgress)
                         {
-                            downloadSpeed = CalculateDownloadSpeed(torrentManager.Progress, lastProgress,
+                            var downloadSpeed = CalculateDownloadSpeed(torrentManager.Progress, lastProgress,
                                 torrentManager.Torrent.Size, stopwatch.ElapsedMilliseconds);
 
                             onDownloadProgress((float)torrentManager.Progress / 100.0f, downloadSpeed);

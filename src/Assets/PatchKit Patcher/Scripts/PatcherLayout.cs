@@ -1,6 +1,5 @@
 ﻿using PatchKit.Unity.API.UI;
 using UnityEngine;
-using UnityEngine.Assertions;
 using UnityEngine.UI;
 
 namespace PatchKit.Unity.Patcher
@@ -9,7 +8,9 @@ namespace PatchKit.Unity.Patcher
     public class PatcherLayout : MonoBehaviour
     {
         private PatchKitUnityPatcher _patchKitUnityPatcher;
-        
+
+        private PatcherController _patcherController;
+
         public int Width;
 
         public int Height;
@@ -48,16 +49,16 @@ namespace PatchKit.Unity.Patcher
         {
             _patchKitUnityPatcher = GetComponent<PatchKitUnityPatcher>();
 
-            Assert.IsNotNull(_patchKitUnityPatcher);
-
-            Screen.SetResolution(Width, Height, false);
-
-            UpdateTitleBarButtons();
+            _patcherController = GetComponent<PatcherController>();
         }
 
         private void Start()
         {
-            ChangelogText.SecretKey = _patchKitUnityPatcher.SecretKey;
+            Screen.SetResolution(Width, Height, false);
+
+            UpdateTitleBarButtons();
+
+            ChangelogText.SecretKey = _patcherController.SecretKey;
 
             ChangelogText.Refresh();
         }

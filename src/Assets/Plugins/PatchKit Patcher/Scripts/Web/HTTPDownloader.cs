@@ -12,10 +12,10 @@ namespace PatchKit.Unity.Patcher.Web
             ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, errors) => true;
         }
 
-        public delegate void DownloadProgress(float progress, float speed);
+        public delegate void DownloadProgressHandler(float progress, float speed);
 
         public void DownloadFile(string url, string destinationPath, long totalDownloadBytesCount,
-            DownloadProgress onDownloadProgress, AsyncCancellationToken cancellationToken)
+            DownloadProgressHandler onDownloadProgress, AsyncCancellationToken cancellationToken)
         {
             onDownloadProgress(0.0f, 0.0f);
 

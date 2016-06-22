@@ -6,9 +6,9 @@ namespace PatchKit.Unity.Patcher.Utilities
 {
     internal class Unarchiver
     {
-        public delegate void UnarchiveProgress(float progress);
+        public delegate void UnarchiveProgressHandler(float progress);
 
-        public void Unarchive(string packagePath, string destinationPath, UnarchiveProgress onUnarchiveProgress, AsyncCancellationToken cancellationToken)
+        public void Unarchive(string packagePath, string destinationPath, UnarchiveProgressHandler onUnarchiveProgress, AsyncCancellationToken cancellationToken)
         {
             using (var zip = ZipFile.Read(packagePath))
             {

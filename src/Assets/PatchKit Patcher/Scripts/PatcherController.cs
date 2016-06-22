@@ -9,7 +9,12 @@ namespace PatchKit.Unity.Patcher
     [RequireComponent(typeof(PatchKitUnityPatcher))]
     public class PatcherController : MonoBehaviour
     {
+        [Multiline]
         public string EditorCommandLineArgs;
+
+        public string SecretKey { get; private set; }
+
+        public string ApplicationDataPath { get; private set; }
 
         private PatchKitUnityPatcher _patchKitUnityPatcher;
 
@@ -42,7 +47,7 @@ namespace PatchKit.Unity.Patcher
             UnityEngine.Application.Quit();
         }
 
-        private void Awake()
+        protected virtual void Awake()
         {
             _patchKitUnityPatcher = GetComponent<PatchKitUnityPatcher>();
 
@@ -50,7 +55,7 @@ namespace PatchKit.Unity.Patcher
 
             if (TryReadArgument("--secret", out secretKey))
             {
-                _patchKitUnityPatcher.SecretKey = DecodeSecret(secretKey);
+                SecretKey = DecodeSecret(secretKey);
             }
 
             string applicationDataPath;
@@ -58,8 +63,14 @@ namespace PatchKit.Unity.Patcher
             if (TryReadArgument("--installdir", out applicationDataPath))
             {
                 // ReSharper disable once AssignNullToNotNullAttribute
-                _patchKitUnityPatcher.ApplicationDataPath = Path.Combine(Path.GetDirectoryName(UnityEngine.Application.dataPath), applicationDataPath);
+                ApplicationDataPath = Path.Combine(UnityEngine.Application.isEditor ? UnityEngine.Application.persistentDataPath : Path.GetDirectoryName(UnityEngine.Application.dataPath), applicationDataPath);
             }
+        }
+
+        protected virtual void Start()
+        {
+            _patchKitUnityPatcher.SecretKey = SecretKey;
+            _patchKitUnityPatcher.ApplicationDataPath = ApplicationDataPath;
 
             _patchKitUnityPatcher.StartPatching();
         }
@@ -109,5 +120,13 @@ namespace PatchKit.Unity.Patcher
             Buffer.BlockCopy(bytes, 0, chars, 0, bytes.Length);
             return new string(chars);
         }
+
+#if UNITY_EDITOR
+        [ContextMenu("Open Editor Application Directory")]
+        public void OpenEditorApplicationDirectory()
+        {
+            UnityEditor.EditorUtility.OpenWithDefaultApp(UnityEngine.Application.persistentDataPath);
+        }
+#endif
     }
 }

@@ -144,12 +144,19 @@ namespace PatchKit.Unity.Patcher
 
         private void Patch(AsyncCancellationToken cancellationToken)
         {
+            var progressTracker = new ProgressTracker();
+
+            progressTracker.OnProgress += progress =>
+            {
+                _status.Progress = progress;
+                Dispatcher.Invoke(OnPatchingProgress.Invoke);
+            };
+
             _status.Progress = 0.0f;
 
             if (!InternetConnectionTester.CheckInternetConnection(cancellationToken))
             {
-                //TODO:
-                //throw new NoInternetConnectionException();
+                throw new NoInternetConnectionException();
             }
 
             int currentVersion = _api.GetAppLatestVersionId(_secretKey).Id;
@@ -160,28 +167,25 @@ namespace PatchKit.Unity.Patcher
             {
                 _applicationData.Clear();
 
-                DownloadVersionContent(currentVersion, cancellationToken);
+                DownloadVersionContent(currentVersion, progressTracker, cancellationToken);
             }
             else if (commonVersion.Value != currentVersion)
             {
-                int totalVersionsCount = currentVersion - commonVersion.Value;
-
-                int doneVersionsCount = 0;
-
                 while (currentVersion > commonVersion.Value)
                 {
                     commonVersion = commonVersion.Value + 1;
 
-                    // ReSharper disable once AccessToModifiedClosure
-                    DownloadVersionDiff(commonVersion.Value, progress => OnProgress((doneVersionsCount + progress) / totalVersionsCount), cancellationToken);
-
-                    doneVersionsCount++;
+                    DownloadVersionDiff(commonVersion.Value, progressTracker, cancellationToken);
                 }
             }
         }
 
-        private void DownloadVersionContent(int version, AsyncCancellationToken cancellationToken)
+        private void DownloadVersionContent(int version, ProgressTracker progressTracker, AsyncCancellationToken cancellationToken)
         {
+            var downloadTorrentProgress = progressTracker.AddNewTask(0.05f);
+            var downloadProgress = progressTracker.AddNewTask(2.0f);
+            var unzipProgress = progressTracker.AddNewTask(0.5f);
+
             var contentSummary = _api.GetAppContentSummary(_secretKey, version);
 
             var contentTorrentUrl = _api.GetAppContentTorrentUrl(_secretKey, version);
@@ -194,15 +198,15 @@ namespace PatchKit.Unity.Patcher
             {
                 _status.IsDownloading = true;
 
-                _httpDownloader.DownloadFile(contentTorrentUrl.Url, contentTorrentPath, 0, OnDownloadProgress,
+                _httpDownloader.DownloadFile(contentTorrentUrl.Url, contentTorrentPath, 0, (progress, speed) => OnDownloadProgress(downloadTorrentProgress, progress, speed),
                     cancellationToken);
 
-                _torrentDownloader.DownloadFile(contentTorrentPath, contentPackagePath, OnDownloadProgress,
+                _torrentDownloader.DownloadFile(contentTorrentPath, contentPackagePath, (progress, speed) => OnDownloadProgress(downloadProgress, progress, speed),
                     cancellationToken);
 
                 _status.IsDownloading = false;
 
-                _unarchiver.Unarchive(contentPackagePath, _applicationData.Path, OnProgress, cancellationToken);
+                _unarchiver.Unarchive(contentPackagePath, _applicationData.Path, progress => unzipProgress.Progress = progress, cancellationToken);
 
                 foreach (var contentFile in contentSummary.Files)
                 {
@@ -223,8 +227,13 @@ namespace PatchKit.Unity.Patcher
             }
         }
 
-        private void DownloadVersionDiff(int version, Action<float> onProgress, AsyncCancellationToken cancellationToken)
+        private void DownloadVersionDiff(int version, ProgressTracker progressTracker, AsyncCancellationToken cancellationToken)
         {
+            var downloadTorrentProgress = progressTracker.AddNewTask(0.05f);
+            var downloadProgress = progressTracker.AddNewTask(2.0f);
+            var unzipProgress = progressTracker.AddNewTask(0.5f);
+            var patchProgress = progressTracker.AddNewTask(1.0f);
+
             var diffSummary = _api.GetAppDiffSummary(_secretKey, version);
 
             var diffTorrentUrl = _api.GetAppDiffTorrentUrl(_secretKey, version);
@@ -239,11 +248,11 @@ namespace PatchKit.Unity.Patcher
             {
                 _status.IsDownloading = true;
 
-                _httpDownloader.DownloadFile(diffTorrentUrl.Url, diffTorrentPath, 0, OnDownloadProgress, cancellationToken);
+                _httpDownloader.DownloadFile(diffTorrentUrl.Url, diffTorrentPath, 0, (progress, speed) => OnDownloadProgress(downloadTorrentProgress, progress, speed), cancellationToken);
 
-                _torrentDownloader.DownloadFile(diffTorrentPath, diffPackagePath, OnDownloadProgress, cancellationToken);
+                _torrentDownloader.DownloadFile(diffTorrentPath, diffPackagePath, (progress, speed) => OnDownloadProgress(downloadProgress, progress, speed), cancellationToken);
 
-                _unarchiver.Unarchive(diffPackagePath, diffDirectoryPath, progress => onProgress(progress * 0.1f), cancellationToken);
+                _unarchiver.Unarchive(diffPackagePath, diffDirectoryPath, progress => unzipProgress.Progress = progress, cancellationToken);
 
                 _status.IsDownloading = false;
 
@@ -252,7 +261,7 @@ namespace PatchKit.Unity.Patcher
 
                 int doneFilesCount = 0;
 
-                onProgress(0.1f);
+                patchProgress.Progress = 0.0f;
 
                 foreach (var removedFile in diffSummary.RemovedFiles)
                 {
@@ -260,7 +269,7 @@ namespace PatchKit.Unity.Patcher
 
                     doneFilesCount++;
 
-                    onProgress(0.1f + (float)doneFilesCount / totalFilesCount * 0.9f);
+                    patchProgress.Progress = (float)doneFilesCount/totalFilesCount;
                 }
 
                 foreach (var addedFile in diffSummary.AddedFiles)
@@ -277,7 +286,7 @@ namespace PatchKit.Unity.Patcher
 
                     doneFilesCount++;
 
-                    onProgress(0.1f + (float)doneFilesCount / totalFilesCount * 0.9f);
+                    patchProgress.Progress = (float)doneFilesCount / totalFilesCount;
                 }
 
                 foreach (var modifiedFile in diffSummary.ModifiedFiles)
@@ -296,10 +305,10 @@ namespace PatchKit.Unity.Patcher
 
                     doneFilesCount++;
 
-                    onProgress(0.1f + (float)doneFilesCount / totalFilesCount * 0.9f);
+                    patchProgress.Progress = (float)doneFilesCount / totalFilesCount;
                 }
 
-                onProgress(1.0f);
+                patchProgress.Progress = 1.0f;
             }
             finally
             {
@@ -327,19 +336,11 @@ namespace PatchKit.Unity.Patcher
             return _applicationData.CheckFilesConsistency(version, commonVersionContentSummary);
         }
 
-        private void OnProgress(float progress)
+        private void OnDownloadProgress(ProgressTracker.Task downloadTaskProgress, float progress, float speed)
         {
-            _status.Progress = progress;
-
-            Dispatcher.Invoke(OnPatchingProgress.Invoke);
-        }
-
-        private void OnDownloadProgress(float progress, float speed)
-        {
-            _status.DownloadProgress = progress;
             _status.DownloadSpeed = speed;
-
-            Dispatcher.Invoke(OnPatchingProgress.Invoke);
+            _status.DownloadProgress = progress;
+            downloadTaskProgress.Progress = progress;
         }
 
         private void ResetStatus()
