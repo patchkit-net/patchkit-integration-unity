@@ -14,7 +14,7 @@ namespace PatchKit.Unity.Patcher.Editor
 
             if (buildTarget == BuildTarget.StandaloneWindows || buildTarget == BuildTarget.StandaloneWindows64)
             {
-                runCmd = string.Format("{0} --installDir {{0}} --secret {{1}}", Path.GetFileName(buildPath));
+                runCmd = string.Format("\\\"{{0}}/{0}\\\" --installdir \\\"{{1}}\\\" --secret \\\"{{2}}\\\"", Path.GetFileName(buildPath));
                     
             }
 
@@ -22,7 +22,7 @@ namespace PatchKit.Unity.Patcher.Editor
                 buildTarget == BuildTarget.StandaloneOSXIntel ||
                 buildTarget == BuildTarget.StandaloneOSXIntel64)
             {
-                runCmd = string.Format("open -a \"{0}\" --args --installDir {{0}} --secret {{1}}", Path.GetFileName(buildPath));
+                runCmd = string.Format("open -a \\\"{{0}}/{0}\\\" --args --installdir \\\"{{1}}\\\" --secret \\\"{{2}}\\\"", Path.GetFileName(buildPath));
             }
 
             // ReSharper disable once AssignNullToNotNullAttribute
