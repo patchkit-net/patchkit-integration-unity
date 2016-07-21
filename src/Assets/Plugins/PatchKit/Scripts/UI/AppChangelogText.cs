@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Linq;
+using PatchKit.Unity.Api;
 using PatchKit.Unity.Utilities;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,12 +30,12 @@ namespace PatchKit.Unity.UI
 
         protected override IEnumerator RefreshCoroutine()
         {
-            //TODO: Use ApiInstance.Instance.BeginGetAppChangelog() after it receives implementation
-            var request = ApiInstance.Instance.BeginGetAppVersionList(AppSecret);
+            //TODO: Use ApiConnection.Instance.BeginGetAppChangelog() after it receives implementation
+            var request = ApiConnectionInstance.Instance.BeginGetAppVersionList(AppSecret);
 
             yield return request.WaitCoroutine();
 
-            var versionsList = ApiInstance.Instance.EndGetAppVersionList(request);
+            var versionsList = ApiConnectionInstance.Instance.EndGetAppVersionList(request);
 
             Text.text = string.Join("\n",
                 versionsList.OrderByDescending(version => version.Id).Select(version =>

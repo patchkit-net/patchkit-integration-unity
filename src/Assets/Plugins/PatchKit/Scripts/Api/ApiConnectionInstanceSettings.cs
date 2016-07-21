@@ -1,14 +1,15 @@
-﻿#if UNITY_EDITOR
+﻿using PatchKit.Api;
+#if UNITY_EDITOR
 using UnityEditor;
 #endif
 using UnityEngine;
 
-namespace PatchKit.Unity
+namespace PatchKit.Unity.Api
 {
     /// <summary>
-    /// Settings for <see cref="ApiInstance"/>.
+    /// Settings for <see cref="ApiConnectionInstance"/>.
     /// </summary>
-    public class ApiInstanceSettings : ScriptableObject
+    public class ApiConnectionInstanceSettings : ScriptableObject
     {
         private const string SettingsFileName = "PatchKit API Settings";
 
@@ -20,9 +21,9 @@ namespace PatchKit.Unity
             return new ApiConnectionSettings(10000, "http://api.patchkit.net");
         }
 
-        private static ApiInstanceSettings FindInstance()
+        private static ApiConnectionInstanceSettings FindInstance()
         {
-            var settings = Resources.Load<ApiInstanceSettings>(SettingsFileName);
+            var settings = Resources.Load<ApiConnectionInstanceSettings>(SettingsFileName);
 
 #if UNITY_EDITOR
             if (settings == null)
@@ -38,7 +39,7 @@ namespace PatchKit.Unity
                     pingObject = true;
                 }
 
-                settings = CreateInstance<ApiInstanceSettings>();
+                settings = CreateInstance<ApiConnectionInstanceSettings>();
                 settings.ConnectionSettings = CreateApiConnectionSettings();
 
                 AssetDatabase.CreateAsset(settings, string.Format("Assets/Plugins/PatchKit/Resources/{0}.asset", SettingsFileName));
