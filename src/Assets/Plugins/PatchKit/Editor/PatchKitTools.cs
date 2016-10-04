@@ -1,34 +1,104 @@
-﻿using UnityEngine;
-using System.Collections;
+﻿using System;
 using System.Diagnostics;
+using System.IO;
+using System.Threading;
+using JetBrains.Annotations;
+using UnityEditor;
 
-public static class PatchKitTools 
+namespace PatchKit.Unity.Editor
 {
-    public bool Available()
+    public static class PatchKitTools
     {
-        //TODO: Implementation.
-        return true;
-    }
+        private static void ThrowIfNotAvailable()
+        {
+            if (!AreAvailable())
+            {
+                throw new InvalidOperationException("PatchKit Tools aren't available. Make sure that everything is setup correctly.");
+            }
+        }
 
-    public void Execute(string toolName, params string[] arguments)
-    {
-        string argumentsText = ;
+        private static string GetPath()
+        {
+            if (PatchKitToolsSettings.Editor.Path != null || string.IsNullOrEmpty(PatchKitToolsSettings.Editor.Path))
+            {
+                return PatchKitToolsSettings.Editor.Path;
+            }
 
-        string commandLine = string.Format("patchkit-tools {0} {1}", toolName, argumentsText);
+            return FindPath();
+        }
 
-        ProcessStartInfo processStartInfo;
+        /// <summary>
+        /// Finds the path of patchkit-tools by searching locations in PATH variable.
+        /// </summary>
+        [CanBeNull]
+        public static string FindPath()
+        {
+            var paths = Environment.GetEnvironmentVariable("PATH");
 
-        processStartInfo.RedirectStandardOutput = true;
+            if (paths != null)
+            {
+                foreach (var path in paths.Split(';'))
+                {
+                    var fullPath = Path.Combine(path, "patchkit-tools");
 
-        processStartInfo.Arguments = toolName + " " + string.Join(" ", arguments);
+                    if (File.Exists(fullPath))
+                    {
+                        return fullPath;
+                    }
+                }
+            }
 
-        Process process = new Process(processStartInfo);
+            return null;
+        }
 
-        process.Start();
-    }
+        public static bool AreAvailable()
+        {
+            string path = GetPath();
 
-    public string MakeVersion(string secret, string versionPath, string versionLabel)
-    {
-        Execute("make-version", string.Format("-f \"{0}", versionPath));
+            return path != null && File.Exists(path);
+        }
+
+        /// <summary>
+        /// Executes the specified tool.
+        /// </summary>
+        /// <param name="toolName">Name of the tool.</param>
+        /// <param name="arguments">The arguments.</param>
+        /// <returns>Exit code.</returns>
+        /// <exception cref="InvalidOperationException">PatchKit Tools aren't available. Make sure that everything is setup correctly.</exception>
+        public static int Execute(string toolName, string arguments)
+        {
+            ThrowIfNotAvailable();
+
+            Process process = new Process
+            {
+                StartInfo =
+            {
+                FileName = GetPath(),
+                Arguments = toolName + " " + arguments
+            }
+            };
+
+            process.Start();
+
+            while (!process.HasExited)
+            {
+                if (EditorUtility.DisplayCancelableProgressBar("Waiting for finish of tool execution...",
+                        "Click cancel to abort tool execution.", 0.0f))
+                {
+                    process.Kill();
+                }
+                else
+                {
+                    Thread.Sleep(100);
+                }
+            }
+
+            return process.ExitCode;
+        }
+
+        public static int MakeVersion(string secret, string apiKey, string versionPath, string versionLabel)
+        {
+            return Execute("make-version", string.Format("-f \"{0}\" -l \"{1}\" -s \"{2}\" -a \"{3}\"", versionPath, versionLabel, secret, apiKey));
+        }
     }
 }
