@@ -23,6 +23,22 @@ namespace PatchKit.Unity.Editor
                 get { return Application.dataPath; }
             }
 
+            private static string GetBuildFileNameEditorPrefsKey(BuildTarget platform)
+            {
+                return string.Format("PatchKitToolsSettings.Project.{0}.BuildFileName.{1}", ProjectIdentifier, platform);
+            }
+
+            [CanBeNull]
+            public static string GetBuildFileName(BuildTarget platform)
+            {
+                return EditorPrefs.GetString(GetBuildFileNameEditorPrefsKey(platform), null);
+            }
+
+            public static void SetBuildFileName(BuildTarget platform, string value)
+            {
+                EditorPrefs.SetString(GetBuildFileNameEditorPrefsKey(platform), value);
+            }
+
             private static string GetSecretEditorPrefsKey(BuildTarget platform)
             {
                 return string.Format("PatchKitToolsSettings.Project.{0}.Secret.{1}", ProjectIdentifier, platform);

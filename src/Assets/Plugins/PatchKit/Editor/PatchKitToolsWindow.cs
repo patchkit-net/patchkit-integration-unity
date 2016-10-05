@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -13,7 +14,7 @@ namespace PatchKit.Unity.Editor
             Settings
         }
 
-        private static readonly BuildTarget[] AvailableBuildTargets = 
+        private static readonly BuildTarget[] AvailableBuildTargets =
         {
             BuildTarget.StandaloneWindows,
             BuildTarget.StandaloneWindows64,
@@ -33,9 +34,13 @@ namespace PatchKit.Unity.Editor
             window.Show();
         }
 
-        private bool _publish;
+        private bool _makeVersionPublish;
 
-        private BuildTarget _settingsSecretBuildTarget;
+        private string _makeVersionLabel;
+
+        private bool _settingsHasPathBeenSearched;
+
+        private BuildTarget _settingsPlatformSpecific = EditorUserBuildSettings.activeBuildTarget;
 
         private Tab _tab = Tab.MakeVersion;
 
@@ -43,7 +48,7 @@ namespace PatchKit.Unity.Editor
         // ReSharper disable once UnusedMember.Local
         private void OnGUI()
         {
-            GUILayout.BeginVertical();
+            EditorGUILayout.BeginVertical();
             {
                 DisplayTabSelection();
 
@@ -56,100 +61,239 @@ namespace PatchKit.Unity.Editor
                     DisplaySettingsTab();
                 }
             }
-            GUILayout.EndVertical();
+            EditorGUILayout.EndVertical();
         }
 
-        private bool IsSupportedPlatform()
+        private void DisplayTabSelection()
         {
-            if (AvailableBuildTargets.Contains(EditorUserBuildSettings.activeBuildTarget))
+            Tab previousTab = _tab;
+            _tab = (Tab) GUILayout.Toolbar((int) _tab, new[] {"Make Version", "Settings"});
+            if (_tab != previousTab)
             {
+                EditorGUI.FocusTextInControl(string.Empty);
+            }
+        }
+
+        private void BuildAndMakeVersion(bool publish)
+        {
+            BuildTarget buildTarget = EditorUserBuildSettings.activeBuildTarget;
+
+            string secret = PatchKitToolsSettings.Project.GetSecret(buildTarget);
+            string apiKey = PatchKitToolsSettings.Project.GetApiKey();
+            string buildFileName = PatchKitToolsSettings.Project.GetBuildFileName(buildTarget);
+
+            string buildDirectory = FileUtil.GetUniqueTempPathInProject();
+
+            try
+            {
+                var buildDirectoryInfo = Directory.CreateDirectory(buildDirectory);
+
+                BuildPipeline.BuildPlayer(
+                    EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray(),
+                    // ReSharper disable once AssignNullToNotNullAttribute
+                    Path.Combine(buildDirectoryInfo.FullName, buildFileName), buildTarget, BuildOptions.None);
+
+                // Clear build from PDB files
+
+                foreach (var pdbFile in buildDirectoryInfo.GetFiles("*.pdb", SearchOption.TopDirectoryOnly))
+                {
+                    File.Delete(pdbFile.FullName);
+                }
+
+                PatchKitTools.MakeVersion(secret, apiKey, buildDirectoryInfo.FullName, _makeVersionLabel, publish);
+            }
+            finally
+            {
+                if (Directory.Exists(buildDirectory))
+                {
+                    Directory.Delete(buildDirectory, true);
+                }
+
+                if (File.Exists(buildDirectory))
+                {
+                    File.Delete(buildDirectory);
+                }
+            }
+        }
+
+        private bool DisplayMakeVersionError()
+        {
+            BuildTarget buildTarget = EditorUserBuildSettings.activeBuildTarget;
+
+            if (string.IsNullOrEmpty(_makeVersionLabel))
+            {
+                EditorGUILayout.HelpBox("Version label cannot be empty.", MessageType.Error);
+
+                return true;
+            }
+
+            if (!AvailableBuildTargets.Contains(buildTarget))
+            {
+                EditorGUILayout.HelpBox(string.Format("Unsupported build target - {0}\n" +
+                                                      "Please change it in Build Settings.",
+                    buildTarget),
+                    MessageType.Error);
+
+                return true;
+            }
+
+            string secret = PatchKitToolsSettings.Project.GetSecret(buildTarget);
+
+            if (string.IsNullOrEmpty(secret))
+            {
+                EditorGUILayout.HelpBox("Empty or invalid secret.\nPlease change it in Settings.", MessageType.Error);
+
+                return true;
+            }
+
+            string apiKey = PatchKitToolsSettings.Project.GetApiKey();
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                EditorGUILayout.HelpBox("Empty or invalid API key.\nPlease change it in Settings.", MessageType.Error);
+
+                return true;
+            }
+
+            string buildName = PatchKitToolsSettings.Project.GetBuildFileName(buildTarget);
+
+            if (string.IsNullOrEmpty(buildName))
+            {
+                EditorGUILayout.HelpBox("Empty or invalid build name.\nPlease change it in Settings.", MessageType.Error);
+
                 return true;
             }
 
             return false;
         }
 
-        private void DisplayTabSelection()
-        {
-            _tab = (Tab) GUILayout.Toolbar((int) _tab, new []{"Make Version", "Settings"});
-        }
-
         private void DisplayMakeVersionInformation()
         {
-            if (IsSupportedPlatform())
+            EditorGUILayout.BeginVertical(EditorStyles.textArea);
             {
-                EditorGUILayout.BeginVertical(EditorStyles.textArea);
-                {
-                    EditorGUILayout.LabelField(string.Format("Build target - {0}", EditorUserBuildSettings.activeBuildTarget));
-                }
-                EditorGUILayout.EndVertical();
+                EditorGUILayout.LabelField(string.Format("Build target - {0}",
+                    EditorUserBuildSettings.activeBuildTarget));
+
+                string buildFileName = PatchKitToolsSettings.Project.GetBuildFileName(EditorUserBuildSettings.activeBuildTarget);
+
+                EditorGUILayout.LabelField(string.Format("Build file name - {0}", buildFileName));
+
+                string secret = PatchKitToolsSettings.Project.GetSecret(EditorUserBuildSettings.activeBuildTarget);
+
+                EditorGUILayout.LabelField(string.Format("Secret - {0}", secret));
             }
-            else
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DisplayMakeVersionBuildBar()
+        {
+            EditorGUILayout.BeginHorizontal();
             {
-                EditorGUILayout.HelpBox(string.Format("Unsupported build target - {0}", EditorUserBuildSettings.activeBuildTarget),
-                    MessageType.Error);
+                if (GUILayout.Button("Build and make version", GUILayout.ExpandWidth(true)))
+                {
+                    EditorApplication.delayCall += () => BuildAndMakeVersion(_makeVersionPublish);
+                }
+
+                _makeVersionPublish = EditorGUILayout.ToggleLeft("Publish", _makeVersionPublish, GUILayout.Width(65.0f));
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space();
+        }
+
+        private void DisplayMakeVersionTab()
+        {
+            _makeVersionLabel = EditorGUILayout.TextField("Version label", _makeVersionLabel);
+
+            bool error = DisplayMakeVersionError();
+
+            if (!error)
+            {
+                DisplayMakeVersionInformation();
             }
 
             if (GUILayout.Button("Open Build Settings"))
             {
                 GetWindow(Type.GetType("UnityEditor.BuildPlayerWindow,UnityEditor"), true);
             }
-        }
 
+            GUILayout.FlexibleSpace();
 
-        private void DisplayMakeVersionBuildBar()
-        {
-            EditorGUI.BeginDisabledGroup(!IsSupportedPlatform());
+            EditorGUI.BeginDisabledGroup(error);
 
-            GUILayout.BeginHorizontal();
-            {
-                GUILayout.Button("Build and make version", GUILayout.ExpandWidth(true));
-
-                _publish = EditorGUILayout.ToggleLeft("Publish", _publish, GUILayout.Width(65.0f));
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(10.0f);
+            DisplayMakeVersionBuildBar();
 
             EditorGUI.EndDisabledGroup();
         }
 
-        private void DisplayMakeVersionTab()
+        private void DisplaySettingsToolsPath()
         {
-            DisplayMakeVersionInformation();
+            string path = PatchKitToolsSettings.Editor.Path ?? string.Empty;
 
-            GUILayout.FlexibleSpace();
+            if (!_settingsHasPathBeenSearched && string.IsNullOrEmpty(path) && PatchKitTools.AreAvailable())
+            {
+                _settingsHasPathBeenSearched = true;
+                path = PatchKitTools.FindPath() ?? string.Empty;
+            }
 
-            DisplayMakeVersionBuildBar();
+            EditorGUILayout.BeginHorizontal();
+            {
+                path = EditorGUILayout.TextField("Path", path);
+                if (GUILayout.Button("Open"))
+                {
+                    path = EditorUtility.OpenFilePanel("Open patchkit-tools", string.Empty, string.Empty);
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
+            PatchKitToolsSettings.Editor.Path = path;
         }
 
         private void DisplaySettingsTab()
         {
+            DisplaySettingsToolsPath();
+
             string apiKey = PatchKitToolsSettings.Project.GetApiKey();
 
             apiKey = EditorGUILayout.TextField("API key", apiKey);
 
             PatchKitToolsSettings.Project.SetApiKey(apiKey);
 
-            GUILayout.BeginHorizontal();
+            EditorGUILayout.BeginHorizontal();
             {
-                GUILayout.Label("Secret");
-                _settingsSecretBuildTarget = (BuildTarget) EditorGUILayout.IntPopup((int) _settingsSecretBuildTarget,
+                EditorGUILayout.PrefixLabel("Platform specific");
+                _settingsPlatformSpecific = (BuildTarget) EditorGUILayout.IntPopup((int) _settingsPlatformSpecific,
                     AvailableBuildTargets.Select(target => target.ToString()).ToArray(),
                     AvailableBuildTargets.Select(target => (int) target).ToArray());
 
-                if (!AvailableBuildTargets.Contains(_settingsSecretBuildTarget))
+                if (!AvailableBuildTargets.Contains(_settingsPlatformSpecific))
                 {
-                    _settingsSecretBuildTarget = AvailableBuildTargets[0];
+                    _settingsPlatformSpecific = AvailableBuildTargets[0];
                 }
-
-                string secret = PatchKitToolsSettings.Project.GetSecret(_settingsSecretBuildTarget);
-
-                secret = EditorGUILayout.TextField(secret);
-
-                PatchKitToolsSettings.Project.SetSecret(_settingsSecretBuildTarget, secret);
             }
-            GUILayout.EndHorizontal();
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginVertical(EditorStyles.textArea);
+            {
+                string secret = PatchKitToolsSettings.Project.GetSecret(_settingsPlatformSpecific);
+
+                secret = EditorGUILayout.TextField("Secret", secret);
+
+                PatchKitToolsSettings.Project.SetSecret(_settingsPlatformSpecific, secret);
+
+                string buildFileName = PatchKitToolsSettings.Project.GetBuildFileName(_settingsPlatformSpecific);
+
+                buildFileName = EditorGUILayout.TextField("Build file name", buildFileName);
+
+                PatchKitToolsSettings.Project.SetBuildFileName(_settingsPlatformSpecific, buildFileName);
+
+                EditorGUILayout.HelpBox("Remember to set file extension prior to platform. For example - Game.exe",
+                    MessageType.Info);
+
+                EditorGUILayout.HelpBox("Changing build file name in update could result in patch equal to whole game size. Try to not change it after uploading first version.",
+                    MessageType.Warning);
+            }
+            EditorGUILayout.EndVertical();
         }
     }
 }

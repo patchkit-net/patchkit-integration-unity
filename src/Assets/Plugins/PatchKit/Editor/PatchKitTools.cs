@@ -69,36 +69,60 @@ namespace PatchKit.Unity.Editor
         {
             ThrowIfNotAvailable();
 
-            Process process = new Process
-            {
-                StartInfo =
-            {
-                FileName = GetPath(),
-                Arguments = toolName + " " + arguments
-            }
-            };
+            string workingDirectory = FileUtil.GetUniqueTempPathInProject();
 
-            process.Start();
-
-            while (!process.HasExited)
+            try
             {
-                if (EditorUtility.DisplayCancelableProgressBar("Waiting for finish of tool execution...",
-                        "Click cancel to abort tool execution.", 0.0f))
+                Directory.CreateDirectory(workingDirectory);
+
+                Process process = new Process
                 {
-                    process.Kill();
-                }
-                else
+                    StartInfo =
+                    {
+                        FileName = GetPath(),
+                        Arguments = toolName + " " + arguments,
+                        WorkingDirectory = workingDirectory
+                    }
+                };
+
+                process.Start();
+
+                try
                 {
-                    Thread.Sleep(100);
+                    while (!process.HasExited)
+                    {
+                        if (EditorUtility.DisplayCancelableProgressBar("Waiting for finish of tool execution...",
+                            "Click cancel to abort tool execution.", 0.0f))
+                        {
+                            process.Close();
+                            process.Kill();
+                        }
+                        else
+                        {
+                            Thread.Sleep(100);
+                        }
+                    }
+                }
+                finally
+                {
+                    EditorUtility.ClearProgressBar();
+                }
+
+
+                return process.ExitCode;
+            }
+            finally
+            {
+                if (Directory.Exists(workingDirectory))
+                {
+                    Directory.Delete(workingDirectory, true);
                 }
             }
-
-            return process.ExitCode;
         }
 
-        public static int MakeVersion(string secret, string apiKey, string versionPath, string versionLabel)
+        public static int MakeVersion(string secret, string apiKey, string versionPath, string versionLabel, bool publish = false)
         {
-            return Execute("make-version", string.Format("-f \"{0}\" -l \"{1}\" -s \"{2}\" -a \"{3}\"", versionPath, versionLabel, secret, apiKey));
+            return Execute("make-version", string.Format("-f \"{0}\" -l \"{1}\" -s \"{2}\" -a \"{3}\" -p \"{4}\"", versionPath, versionLabel, secret, apiKey, publish ? "true" : "false"));
         }
     }
 }
