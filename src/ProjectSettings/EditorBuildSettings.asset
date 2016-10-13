@@ -5,5 +5,7 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
-    path: Assets/PatchKit Patcher/Patcher.unity
+  - enabled: 1
+    path: Assets/PatchKit/Examples/Example 1.unity
+  - enabled: 1
+    path: Assets/PatchKit/Examples/Example 2.unity
