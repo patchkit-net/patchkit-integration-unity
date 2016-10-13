@@ -13,6 +13,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ApiConnectionSettings:
     MainServer: api.patchkit.net
-    CacheServers: []
+    CacheServers:
+    - api-cache-node-1.patchkit.net:43230
+    - api-cache-node-2.patchkit.net:43230
+    - api-cache-node-3.patchkit.net:43230
     MinimumTimeout: 5000
     MaximumTimeout: 10000
