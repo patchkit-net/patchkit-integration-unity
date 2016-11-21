@@ -16,7 +16,7 @@ namespace PatchKit.Unity.UI
 
         protected ApiConnection ApiConnection
         {
-            get { return _apiConnection ?? (_apiConnection = new ApiConnection(Settings.GetApiConnectionSettings())); }
+            get { return _apiConnection; }
         }
 
         [ContextMenu("Reload")]
@@ -46,6 +46,8 @@ namespace PatchKit.Unity.UI
 
         protected virtual void Awake()
         {
+            _apiConnection = new ApiConnection(Settings.GetApiConnectionSettings());
+
             if (LoadOnAwake)
             {
                 Load();
